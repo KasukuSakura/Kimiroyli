@@ -1,0 +1,14 @@
+name kimiroyli.api
+
+require kimiroyli.unsafe
+require java.instrument
+
+exports *
+
+cancel com.kasukusakura.kimiroyli.api.internal.*
+exports com.kasukusakura.kimiroyli.api.internal.* -> kimiroyli.core
+
+open * -> kimiroyli.core
+
+uses com.kasukusakura.kimiroyli.api.internal.ImplBridge
+

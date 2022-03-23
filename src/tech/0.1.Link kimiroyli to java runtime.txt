@@ -1,0 +1,25 @@
+# 在 java.base 建立与 kimiroyli.core 通讯的桥
+
+首先需要一个前端放 java.base 的入口, 以及一个后端桥接 java.base 至 kimiroyli.core
+
+前端只应该被 java.base 使用, 所以需要将前端放进 java.base 的内部包里. (like jdk.internal.misc)
+然后后端在 kimiroyli.core 实现相关接口, 并通过 Thread.contextClassLoader 传递
+
+
+
+package jdk.internal.misc;
+
+public abstract class KimiroyliFT {
+    private static final KimiroyliFT I;
+
+    static {
+        var impl = Class.forName("org.kasukusakura.kimiroyli.core.KimiroyliBT", false, Thread.currentThread().getContextClassLoader());
+        var ctr = impl.getDeclaredConstructor();
+        ctr.setAccessible(true);
+        I = (KimiroyliFT) ctr.newInstance(new Object[0]);
+    }
+
+    public static void foo() { I.abs$foo(); }
+    protected abstract void abs$foo();
+
+}

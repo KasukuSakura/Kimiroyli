@@ -1,0 +1,9 @@
+dependencies {
+    api 'io.github.karlatemp:unsafe-accessor'
+    api 'org.ow2.asm:asm'
+    api 'org.ow2.asm:asm-tree'
+    api 'org.ow2.asm:asm-commons'
+    api 'org.ow2.asm:asm-util'
+    api 'org.ow2.asm:asm-analysis'
+    api 'org.jetbrains:annotations'
+}

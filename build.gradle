@@ -1,0 +1,91 @@
+plugins {
+    id 'java'
+}
+
+allprojects {
+    group "com.kasukusakura.kimiroyli"
+    version "0.0.1"
+}
+
+subprojects {
+    pluginManager.apply('java')
+    pluginManager.apply('java-library')
+
+
+    repositories {
+        mavenCentral()
+    }
+
+    tasks.withType(JavaCompile) {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    sourceSets.main.java.srcDirs.clear()
+    sourceSets.main.java.srcDirs(file('src'))
+    sourceSets.main.resources.srcDirs.clear()
+    sourceSets.main.resources.srcDirs(file('res'))
+
+
+    sourceSets.test.java.srcDirs.clear()
+    sourceSets.test.java.srcDirs(file('test'))
+    sourceSets.test.resources.srcDirs.clear()
+    sourceSets.test.resources.srcDirs(file('resTest'))
+
+}
+
+
+({
+
+    def versionOverrides = [
+            '=====================================': '',
+            'org.jetbrains:annotations'            : '23.0.0',
+            'org.ow2.asm'                          : '9.2',
+            'io.github.karlatemp:unsafe-accessor'  : '1.6.2',
+    ]
+    allprojects {
+        afterEvaluate {
+            configurations.all { Configuration configuration ->
+                def lst = configuration.dependencies.matching { Dependency dependency ->
+                    if (dependency.version != null) return false
+                    return true
+                }.toList()
+                lst.forEach { dep ->
+                    //noinspection GroovyAssignabilityCheck
+                    def result1 = versionOverrides[dep.toString()]
+                    if (result1 == null) {
+                        //noinspection GroovyAssignabilityCheck
+                        result1 = versionOverrides[dep.group]
+                    }
+                    if (result1 != null) {
+                        configuration.dependencies.remove(dep)
+                        configuration.dependencies.add(
+                                project.dependencies.create(
+                                        group: dep.group,
+                                        name: dep.name,
+                                        version: result1,
+                                )
+                        )
+                    }
+                }
+            }
+        }
+        configurations.all { Configuration configuration ->
+            configuration.resolutionStrategy.eachDependency { dependency ->
+                //noinspection GroovyAssignabilityCheck
+                def result1 = versionOverrides[dependency.requested.module.toString()]
+                if (result1 != null) {
+                    dependency.useVersion(result1)
+                    dependency.because("Custom override rule")
+                } else {
+                    //noinspection GroovyAssignabilityCheck
+                    def result2 = versionOverrides[dependency.requested.group]
+                    if (result2 != null) {
+                        dependency.useVersion(result2)
+                        dependency.because("Custom override rule")
+                    }
+                }
+            }
+        }
+    }
+})();

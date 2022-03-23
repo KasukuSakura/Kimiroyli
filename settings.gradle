@@ -1,0 +1,16 @@
+rootProject.name = 'Kimiroyli'
+
+//noinspection GroovyAssignabilityCheck
+def subproject = { name ->
+    //noinspection GroovyAssignabilityCheck
+    include(':' + name)
+    //noinspection GroovyAssignabilityCheck
+    project(':' + name).projectDir = new File(rootProject.projectDir, "src/" + name)
+}
+
+subproject 'kimiroyli-api'
+
+subproject 'system-core'
+subproject 'bootloader'
+subproject 'bootloader-javaagent'
+subproject 'testing'

@@ -1,0 +1,11 @@
+dependencies {
+    compileOnly project(':kimiroyli-api')
+}
+
+tasks.register('launchTest', JavaExec.class) { exec ->
+    exec.classpath = project.sourceSets.main.runtimeClasspath
+    exec.dependsOn ':bootloader-javaagent:jar'
+    //noinspection GroovyAssignabilityCheck
+    exec.jvmArgs('-javaagent:' + project(':bootloader-javaagent').tasks.jar.outputs.files.singleFile.absolutePath)
+    exec.main 'com.kasukusakura.kimiroyli.test.Testing'
+}

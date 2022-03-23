@@ -1,0 +1,9 @@
+.gradle
+.idea
+
+build/
+hs_err*.log
+
+src/legacy
+
+*.class

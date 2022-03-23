@@ -1,0 +1,7 @@
+name kimiroyli.core
+
+require kimiroyli.api
+require kimiroyli.unsafe
+require java.instrument
+
+provider com.kasukusakura.kimiroyli.api.internal.ImplBridge -> com.kasukusakura.kimiroyli.core.ApiConnect

@@ -1,0 +1,80 @@
+# 系统启动
+
+Kimiroyli 经过两层 loader 以受 JVM 保护的模式启动, 以保护 Kimiroyli 不会被恶意篡改数据
+在 java.lang.Module 的保护下, 非 Kimiroyli 内部模块部分不能对内部数据进行读取, 修改
+
+## 从不受保护的 javaagent (AppClassLoader) 进入真正的 BootLoader
+
+javaagent 将会将 BootLoader 的全部类数据加载进另外的类加载器 <BootLoaderClassLoader> [1!]
+并使用 ModuleLayer 定义一个模块 `kimiroyli.boot`, 以保护 BootLoader 不被外部篡改
+
+## 从 BootLoader 加载 Kimiroyli Core
+
+BootLoader 会准备两个 ClassLoader, 分别为
+
+- KimiroyliLibrariesClassLoader (URLClassLoader) <Unnamed Module> - 用于加载 Kimiroyli 用到的第三方依赖库 (ASM)
+- KimiroyliSystemClassLoader <parent = KimiroyliLibrariesClassLoader> - 用于加载 Kimiroyli 系统
+
+BootLoader 将会为 KimiroyliSystemClassLoader 定义三个模块
+- kimiroyli.unsafe - io.github.karlatemp:unsafe-accessor
+- kimiroyli.api    - :kimiroyli-api
+- kimiroyli.core   - :system-core
+
+其中
+- kimiroyli.unsafe  只对 kimiroyli.api, kimiroyli.core 可用
+- kimiroyli.api     除了 .internal 以外的全部包对全部可见
+- kimiroyli.core    不对任何模块开放
+
+kimiroyli.api 与 kimiroyli.core 使用位于 .api.internal 的通讯桥进行通讯
+
+kimiroyli.core 在加载完毕后会覆盖 <BootLoaderClassLoader> [1!] 的字节码, 以阻止外部代码尝试通过位于
+javaagent (unnamed module) 的 BootLoaderClassLoader 进行注入
+
+-------------------------------------------------------------------------------------------------
+
+Java Runtime <javaagent> ----------------------> Launcher(bootstrap-javaagent) <unnamed module>
+                                                        |-<Launcher.main>
+                ________________________________________|____________
+                |                                                   |
+        BootLoaderLoader <unnamed module>                           |
+                |                                                   |
+                |  <- Define module <kimiroyli.boot>  <-------------|
+                |
+                `- Load class "BootLoader" <named module kimiroyli.boot>
+                    /
+                   /-<BootLoader.main>------------------------------|
+                  /                                                 |
+                 /                                                  |
+                |                                                   |
+        KimiroyliLibrariesLoader <kimiroyli.boot>                   |
+                |                                                   |
+                | <- Add libraries search path into loader <--------|
+                |                                                   |
+        KimiroyliSystemLoader <kimiroyli.boot>                      |
+                |                                                   |
+                | <- define <kimiroyli.unsafe|api|code> <-----------|
+                |
+                `- Load class "Bootstrap" <named module kimiroyli.core>
+                    /
+                   /-<Boostrap.boostrap>
+                  /
+                 /
+                |
+                |--> Prohibit system relaunch
+                |       `- Override bytecode of Launcher(bootstrap-javaagent) <unnamed module>
+                |               | // Override java code
+                |               | public class Launcher {
+                |               |   public static void premain(String opts, Instrumentation instrumentation) {
+                |               |     throw new UnsupportedOperation("Not allowed relaunch system");
+                |               |   }
+                |               | }
+                |
+                |--> Prohibit injection (to Kimioyli)
+                |       `- Override bytecode of BootLoaderLoader
+                |           | class BootLoaderLoader extends ClassLoader {
+                |           |   public Class<?> findClass(String name) {
+                |           |     throw new ClassNotFoundException(name);
+                |           |   }
+                |           | }
+                |
+                |- Other initialization steps...

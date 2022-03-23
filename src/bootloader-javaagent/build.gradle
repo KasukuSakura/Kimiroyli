@@ -1,0 +1,64 @@
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+
+dependencies {}
+
+tasks.register('jar-setup') { setup ->
+    def jarTask = tasks.getByName('jar') as Jar
+    def core = project(':system-core')
+    setup.doLast {
+        def conf = core.configurations.runtimeClasspath.resolvedConfiguration
+        def libs = new ArrayList<String>()
+        conf.files.each { artifact ->
+            if (artifact.name.endsWith(".jar")) {
+                if (artifact.name.toLowerCase().startsWith('kimiroyli')) {
+                    // System core
+                } else if (artifact.name.startsWith('unsafe-accessor')) {
+                    jarTask.from(artifact) {
+                        it.into 'com/kasukusakura/kimiroyli/boot/core'
+                        it.rename { 'unsafe-accessor.jar' }
+                    }
+                } else {
+                    libs.add(artifact.name)
+                    jarTask.from(artifact) {
+                        it.into 'com/kasukusakura/kimiroyli/boot/lib'
+                    }
+                }
+            }
+        }
+        libs.sort(String::compareTo)
+        def tmp = setup.temporaryDir
+        tmp.mkdirs()
+        Files.write(tmp.toPath().resolve('libs.txt'), libs, StandardCharsets.UTF_8)
+        jarTask.from(new File(tmp, 'libs.txt')) {
+            it.into 'com/kasukusakura/kimiroyli/boot/lib'
+        }
+
+        jarTask.from(project(':bootloader').tasks.jar) {
+            it.into 'com/kasukusakura/kimiroyli/boot/core'
+            it.rename { 'bootloader.jar' }
+        }
+        jarTask.from(project(':kimiroyli-api').tasks.jar) {
+            it.into 'com/kasukusakura/kimiroyli/boot/core'
+            it.rename { 'api.jar' }
+        }
+        jarTask.from(project(':system-core').tasks.jar) {
+            it.into 'com/kasukusakura/kimiroyli/boot/core'
+            it.rename { 'system.jar' }
+        }
+    }
+}
+
+jar {
+    manifest.attributes([
+            "Premain-Class"          : "com.kasukusakura.kimiroyli.javaagent.Launcher",
+            "Can-Redefine-Classes"   : "true",
+            "Can-Retransform-Classes": "true",
+    ])
+    dependsOn(tasks.getByName('jar-setup'))
+    dependsOn(
+            ':bootloader:jar',
+            ':kimiroyli-api:jar',
+            ':system-core:jar',
+    )
+}
