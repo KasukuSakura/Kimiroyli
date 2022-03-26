@@ -1,5 +1,6 @@
 package com.kasukusakura.kimiroyli.core;
 
+import com.kasukusakura.kimiroyli.api.log.Logger;
 import com.kasukusakura.kimiroyli.api.perm.Permission;
 
 import java.lang.reflect.AccessibleObject;
@@ -7,6 +8,8 @@ import java.nio.file.StandardOpenOption;
 import java.util.Set;
 
 public class JdkRtBridge {
+    private static final Logger LOGGER = Logger.getLogger("JdkRtBridge");
+
     public static String BRIDGE;
 
     public static void hi() {
@@ -14,26 +17,39 @@ public class JdkRtBridge {
     }
 
     public static void newThreadCheck() {
-        new Throwable("New Thread Check: act from " + Thread.currentThread()).printStackTrace(System.out);
+        if (LOGGER.isDebugEnabled()) {
+            var track = new Throwable("New Thread Check: act from " + Thread.currentThread());
+            LOGGER.debug(null, track);
+        }
     }
 
     public static void newClassLoaderCheck() {
-        new Throwable("New ClassLoader: act from " + Thread.currentThread()).printStackTrace(System.out);
+        if (LOGGER.isDebugEnabled()) {
+            var track = new Throwable("New ClassLoader: act from " + Thread.currentThread());
+            LOGGER.debug(null, track);
+        }
     }
 
     public static void ThreadGroup$checkAccess(ThreadGroup thiz) {
-        new Throwable("ThreadGroup.checkAccess(): " + thiz).printStackTrace(System.out);
+        if (LOGGER.isDebugEnabled()) {
+            var track = new Throwable("ThreadGroup.checkAccess(): " + thiz);
+            LOGGER.debug(null, track);
+        }
     }
 
     public static void file$read(Object arg) {
-        System.out.println("FS Read: " + arg);
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("FS Read: {}", arg);
     }
 
     public static void file$write(Object arg) {
-        System.out.println("FS Write: " + arg);
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("FS Write: {}", arg);
     }
 
     public static void file$raf(Object file, String mode) {
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("new RandomAccessFile: {} <- {}", file, mode);
     }
 
     public static void file$niochannel(Object file, Set<?> options) {
@@ -64,7 +80,9 @@ public class JdkRtBridge {
     public static boolean reflect$checkSetAccessible(AccessibleObject ao, Class<?> caller, Class<?> declared, boolean throwIfException) {
         if (caller.getModule() == Object.class.getModule()) return true;
 
-        System.out.println("[REFLECTION] SetAccessible: " + ao + " from " + caller);
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("[REFLECTION] SetAccessible: {} from {}", ao, caller);
+
         return true;
     }
 

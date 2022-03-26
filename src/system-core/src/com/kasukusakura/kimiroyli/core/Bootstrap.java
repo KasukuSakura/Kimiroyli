@@ -1,7 +1,9 @@
 package com.kasukusakura.kimiroyli.core;
 
 import com.kasukusakura.kimiroyli.api.internal.Threads;
+import com.kasukusakura.kimiroyli.api.log.LogAdapter;
 import com.kasukusakura.kimiroyli.api.perm.StandardPermissions;
+import com.kasukusakura.kimiroyli.core.log.DefLogAdapter;
 import com.kasukusakura.kimiroyli.core.perm.PermCtxImpl;
 import com.kasukusakura.kimiroyli.core.perm.PermManager;
 import io.github.karlatemp.unsafeaccessor.Root;
@@ -41,6 +43,7 @@ public class Bootstrap {
         boostThread.setContextClassLoader(bootstrapClassLoader);
 
         Unsafe.getUnsafe();
+        LogAdapter.setAdapter(new DefLogAdapter());
 
         // Step. 1. Cleanup premain functions
         {
