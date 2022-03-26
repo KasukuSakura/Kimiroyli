@@ -18,6 +18,7 @@ import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Modifier;
 import java.nio.file.Paths;
@@ -28,9 +29,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 public class Bootstrap {
-    @SuppressWarnings({"unused", "CodeBlock2Expr"})
+    @SuppressWarnings({"unused", "CodeBlock2Expr", "RedundantTypeArguments"})
     public static void premain(
             String opts,
             Instrumentation instrumentation,
@@ -329,6 +332,24 @@ public class Bootstrap {
 
                 met.instructions.insertBefore(met.instructions.getFirst(), isn);
             }));
+
+            // privateLookupIn(Class<?> targetClass, Lookup caller)
+            trans.modify(MethodHandles.class, false, node -> ASMModify.editMethodRE(node, "privateLookupIn", "(Ljava/lang/Class;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/invoke/MethodHandles$Lookup;", met -> {
+                // Insert before first getModuleCall
+                var insertPoint = StreamSupport.stream(met.instructions.spliterator(), false)
+                        .<MethodInsnNode>flatMap(it -> {
+                            if (it instanceof MethodInsnNode) return Stream.of((MethodInsnNode) it);
+                            return Stream.empty();
+                        })
+                        .filter(it -> it.owner.equals("java/lang/Class") && it.name.equals("getModule"))
+                        .findFirst().orElseThrow();
+                var insnList = new InsnList();
+                insnList.add(new VarInsnNode(Opcodes.ALOAD, 0));
+                insnList.add(new VarInsnNode(Opcodes.ALOAD, 1));
+                insnList.add(executeBridge("mh$privateLookupIn", "(Ljava/lang/Class;Ljava/lang/invoke/MethodHandles$Lookup;)V"));
+                met.instructions.insertBefore(insertPoint, insnList);
+            }));
+
             //endregion
 
             //region Network (WIP)
@@ -394,9 +415,6 @@ public class Bootstrap {
 
         // Step. 5. Prohibit unsafe accessing
         {
-            // region Limit sun.misc.Unsafe access (WIP)
-            // endregion
-
             // region Prohibit java.lang.reflect.Proxy escape (WIP)
             // endregion
         }

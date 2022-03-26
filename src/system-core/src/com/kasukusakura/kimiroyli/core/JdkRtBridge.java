@@ -3,12 +3,17 @@ package com.kasukusakura.kimiroyli.core;
 import com.kasukusakura.kimiroyli.api.log.Logger;
 import com.kasukusakura.kimiroyli.api.perm.Permission;
 
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.AccessibleObject;
 import java.nio.file.StandardOpenOption;
 import java.util.Set;
 
 public class JdkRtBridge {
     private static final Logger LOGGER = Logger.getLogger("JdkRtBridge");
+    private static final Class<?> SUN_MISC_UNSAFE = ModuleLayer.boot()
+            .findModule("jdk.unsupported")
+            .map(it -> Class.forName(it, "sun.misc.Unsafe"))
+            .orElse(null);
 
     public static String BRIDGE;
 
@@ -83,7 +88,34 @@ public class JdkRtBridge {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("[REFLECTION] SetAccessible: {} from {}", ao, caller);
 
+        if (declared == SUN_MISC_UNSAFE) {
+            var rsp = checkUnsafeAccess(caller, throwIfException, ao);
+            if (rsp != null) {
+                if (throwIfException) throw new java.lang.reflect.InaccessibleObjectException(rsp.toString());
+                return false;
+            }
+        }
+
         return true;
+    }
+
+    public static void mh$privateLookupIn(Class<?> target, MethodHandles.Lookup caller) throws IllegalAccessException {
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("[REFLECTION] privateLookupIn: {} from {}", target, caller);
+        var rsp = checkUnsafeAccess(caller.lookupClass(), true, target);
+        if (rsp != null) {
+            throw new IllegalAccessException(rsp.toString());
+        }
+    }
+
+    private static Object checkUnsafeAccess(Class<?> caller, boolean doError, Object member) {
+        if (caller.getModule().getLayer() == ModuleLayer.boot()) return null;
+        if (!doError) return Boolean.TRUE;
+        var stringBuilder = new StringBuilder();
+        stringBuilder.append(caller).append(" cannot access ")
+                .append(member)
+                .append(" because unsafe access was limited.");
+        return stringBuilder;
     }
 
     public static Class<?> tryResolveApi(String name) {

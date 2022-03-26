@@ -2,8 +2,11 @@ package com.kasukusakura.kimiroyli.test;
 
 import com.kasukusakura.kimiroyli.api.perm.PermissionContext;
 import com.kasukusakura.kimiroyli.api.perm.StandardPermissions;
+import sun.misc.Unsafe;
 
 import java.io.File;
+import java.lang.invoke.MethodHandles;
+import java.lang.reflect.InaccessibleObjectException;
 import java.util.Random;
 
 public class Testing {
@@ -31,6 +34,22 @@ public class Testing {
         try {
             System.loadLibrary("A");
         } catch (UnsatisfiedLinkError ignored) {
+        }
+
+        try {
+            MethodHandles.privateLookupIn(Unsafe.class, MethodHandles.lookup());
+        } catch (IllegalAccessException e) {
+            //noinspection ThrowablePrintedToSystemOut
+            System.out.println(e);
+        }
+        try {
+            Unsafe.class.getDeclaredField("theUnsafe").setAccessible(true);
+        } catch (InaccessibleObjectException e) {
+            //noinspection ThrowablePrintedToSystemOut
+            System.out.println(e);
+        }
+        if (Unsafe.class.getDeclaredField("theUnsafe").trySetAccessible()) {
+            throw new AssertionError();
         }
 
         Runtime.getRuntime().exit(0);
