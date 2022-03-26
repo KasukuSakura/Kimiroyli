@@ -334,11 +334,37 @@ public class Bootstrap {
             //region Network (WIP)
             //endregion
 
-            // region System.loadLibrary (WIP)
+            // region System.loadLibrary & System.exit
             trans.modify(Runtime.class, false, node -> {
                 ASMModify.editMethodRE(node, "loadLibrary0", "(Ljava/lang/Class;Ljava/lang/String;)V", met -> {
+                    var insnList = new InsnList();
+                    insnList.add(new VarInsnNode(Opcodes.ALOAD, 1));
+                    insnList.add(new VarInsnNode(Opcodes.ALOAD, 2));
+                    insnList.add(new InsnNode(Opcodes.ICONST_1));
+                    insnList.add(executeBridge("onCLibLink", "(Ljava/lang/Class;Ljava/lang/String;Z)V"));
+                    met.instructions.insertBefore(met.instructions.getFirst(), insnList);
                 });
                 ASMModify.editMethodRE(node, "load0", "(Ljava/lang/Class;Ljava/lang/String;)V", met -> {
+                    var insnList = new InsnList();
+                    insnList.add(new VarInsnNode(Opcodes.ALOAD, 1));
+                    insnList.add(new VarInsnNode(Opcodes.ALOAD, 2));
+                    insnList.add(new InsnNode(Opcodes.ICONST_0));
+                    insnList.add(executeBridge("onCLibLink", "(Ljava/lang/Class;Ljava/lang/String;Z)V"));
+                    met.instructions.insertBefore(met.instructions.getFirst(), insnList);
+                });
+                ASMModify.editMethodRE(node, "exit", "(I)V", met -> {
+                    var insnList = new InsnList();
+                    insnList.add(new VarInsnNode(Opcodes.ILOAD, 1));
+                    insnList.add(new InsnNode(Opcodes.ICONST_0));
+                    insnList.add(executeBridge("onShutdown", "(IZ)V"));
+                    met.instructions.insertBefore(met.instructions.getFirst(), insnList);
+                });
+                ASMModify.editMethodRE(node, "halt", "(I)V", met -> {
+                    var insnList = new InsnList();
+                    insnList.add(new VarInsnNode(Opcodes.ILOAD, 1));
+                    insnList.add(new InsnNode(Opcodes.ICONST_1));
+                    insnList.add(executeBridge("onShutdown", "(IZ)V"));
+                    met.instructions.insertBefore(met.instructions.getFirst(), insnList);
                 });
             });
             // endregion

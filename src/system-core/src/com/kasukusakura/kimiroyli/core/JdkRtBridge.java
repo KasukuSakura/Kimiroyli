@@ -92,4 +92,18 @@ public class JdkRtBridge {
         }
         return null;
     }
+
+    /*
+     * @param isLoadLibrary true:  System.loadLibrary
+     * @param isLoadLibrary false: System.load
+     */
+    public static void onCLibLink(Class<?> caller, String lib, boolean isLoadLibrary) {
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("[System] onCLibLink: caller: {}, lib: {}, loadLib: {}", caller, lib, isLoadLibrary);
+    }
+
+    public static void onShutdown(int code, boolean isHalt) {
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("[System] onExit: {}, isHalt={}", code, isHalt);
+    }
 }

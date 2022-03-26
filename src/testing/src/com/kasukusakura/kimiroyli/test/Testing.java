@@ -3,6 +3,7 @@ package com.kasukusakura.kimiroyli.test;
 import com.kasukusakura.kimiroyli.api.perm.PermissionContext;
 import com.kasukusakura.kimiroyli.api.perm.StandardPermissions;
 
+import java.io.File;
 import java.util.Random;
 
 public class Testing {
@@ -22,6 +23,17 @@ public class Testing {
             System.out.println(PermissionContext.currentContext());
             return null;
         });
+
+        try {
+            System.load(new File("A").getAbsolutePath());
+        } catch (UnsatisfiedLinkError ignored) {
+        }
+        try {
+            System.loadLibrary("A");
+        } catch (UnsatisfiedLinkError ignored) {
+        }
+
+        Runtime.getRuntime().exit(0);
     }
 
     public static void a() {
