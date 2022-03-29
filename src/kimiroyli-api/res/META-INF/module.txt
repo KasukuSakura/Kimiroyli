@@ -2,6 +2,8 @@ name kimiroyli.api
 
 require kimiroyli.unsafe
 require java.instrument
+require org.objectweb.asm
+require org.objectweb.asm.tree
 
 exports *
 

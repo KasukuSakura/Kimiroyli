@@ -3,5 +3,8 @@ name kimiroyli.core
 require kimiroyli.api
 require kimiroyli.unsafe
 require java.instrument
+require org.objectweb.asm
+require org.objectweb.asm.tree
+require org.objectweb.asm.tree.analysis
 
 provider com.kasukusakura.kimiroyli.api.internal.ImplBridge -> com.kasukusakura.kimiroyli.core.ApiConnect

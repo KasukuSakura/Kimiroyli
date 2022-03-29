@@ -6,6 +6,9 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.module.*;
 import java.net.*;
+import java.nio.ByteBuffer;
+import java.security.CodeSigner;
+import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -35,6 +38,7 @@ public class BootLoader {
             }
         };
         var librariesClasses = new HashMap<String, byte[]>();
+        var refs = new HashMap<String, ModuleReference>();
 
         // jsl://lib.jar/cls
         var urlHandler = new URLStreamHandler() {
@@ -90,13 +94,18 @@ public class BootLoader {
                     var ptx = "library-" + lib + '/' + name;
                     librariesClasses.put(ptx, zip.readAllBytes());
                 }
-                libsCL.addURL(new URL(null, "jsl://kimiroyli/library-" + lib + "/", urlHandler));
+                var url = new URL(null, "jsl://kimiroyli/library-" + lib + "/", urlHandler);
+                var moduleInfo = librariesClasses.get("library-" + lib + "/module-info.class");
+                if (moduleInfo != null) {
+                    var moduleDesc = ModuleDescriptor.read(ByteBuffer.wrap(moduleInfo));
+                    refs.put(moduleDesc.name(), new ModuleRef(moduleDesc, extractImage(librariesClasses, "library-" + lib), url, librariesClasses));
+                } else {
+                    libsCL.addURL(url);
+                }
             }
         }
 
         // librariesClasses.keySet().stream().sorted().forEach(System.out::println);
-
-        var refs = new HashMap<String, ModuleReference>();
 
 
         regModule(resLoader, "unsafe-accessor.jar", "name kimiroyli.unsafe\nexports * -> kimiroyli.api, kimiroyli.core", refs, urlHandler, librariesClasses);
@@ -135,6 +144,20 @@ public class BootLoader {
                         Class.class
                 )
         ).invokeExact(opts, instrumentation, controller, BootLoader.class);
+    }
+
+    private static Map<String, byte[]> extractImage(HashMap<String, byte[]> librariesClasses, String name) {
+        var rsp = new HashMap<String, byte[]>();
+        if (!name.endsWith("/")) {
+            name += "/";
+        }
+        for (var entry : librariesClasses.entrySet()) {
+            var key = entry.getKey();
+            if (key.startsWith(name)) {
+                rsp.put(key.substring(name.length()), entry.getValue());
+            }
+        }
+        return rsp;
     }
 
     static class ModuleRef extends ModuleReference {
@@ -283,7 +306,7 @@ public class BootLoader {
                         moduleDesc.exports(export.getKey(), export.getValue());
                     }
                 }
-                for (var service: services.entrySet()) {
+                for (var service : services.entrySet()) {
                     moduleDesc.provides(service.getKey(), service.getValue());
                 }
             }
@@ -304,12 +327,17 @@ public class BootLoader {
     }
 
     private static class MLoader extends ClassLoader {
-        private static class LoadedModule {
+        private class LoadedModule {
             final ModuleRef ref;
             public ProtectionDomain pd;
 
             private LoadedModule(ModuleRef ref) {
                 this.ref = ref;
+                pd = new ProtectionDomain(
+                        new CodeSource(ref.base, (CodeSigner[]) null),
+                        null,
+                        MLoader.this, null
+                );
             }
 
             @Override
