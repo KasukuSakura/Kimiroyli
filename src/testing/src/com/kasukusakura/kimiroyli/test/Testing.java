@@ -7,8 +7,10 @@ import sun.misc.Unsafe;
 import java.io.File;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.InaccessibleObjectException;
+import java.lang.reflect.Proxy;
 import java.util.Random;
 
+@SuppressWarnings({"deprecation", "ThrowablePrintedToSystemOut"})
 public class Testing {
     public static void main(String[] args) throws Throwable {
         System.out.println("[TESTING] Executed");
@@ -39,19 +41,23 @@ public class Testing {
         try {
             MethodHandles.privateLookupIn(Unsafe.class, MethodHandles.lookup());
         } catch (IllegalAccessException e) {
-            //noinspection ThrowablePrintedToSystemOut
             System.out.println(e);
         }
         try {
             Unsafe.class.getDeclaredField("theUnsafe").setAccessible(true);
         } catch (InaccessibleObjectException e) {
-            //noinspection ThrowablePrintedToSystemOut
             System.out.println(e);
         }
         if (Unsafe.class.getDeclaredField("theUnsafe").trySetAccessible()) {
             throw new AssertionError();
         }
 
+        try {
+            var pxy = Proxy.getProxyClass(Testing.class.getClassLoader(), Class.forName("jdk.internal.access.JavaLangAccess"));
+            System.err.println(pxy);
+        } catch (InaccessibleObjectException e) {
+            System.out.println(e);
+        }
         Runtime.getRuntime().exit(0);
     }
 

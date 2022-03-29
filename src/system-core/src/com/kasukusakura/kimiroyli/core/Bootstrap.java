@@ -21,6 +21,7 @@ import java.lang.instrument.UnmodifiableClassException;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Proxy;
 import java.nio.file.Paths;
 import java.nio.file.spi.FileSystemProvider;
 import java.security.ProtectionDomain;
@@ -415,7 +416,19 @@ public class Bootstrap {
 
         // Step. 5. Prohibit unsafe accessing
         {
-            // region Prohibit java.lang.reflect.Proxy escape (WIP)
+            // region Prohibit java.lang.reflect.Proxy escape
+            trans.modify(Proxy.class, false, node -> {
+                RunAnyLambda<MethodNode> action = met -> {
+                    var insnList = new InsnList();
+                    insnList.add(JdkRtBridge.REFLECTION_GET_CALLER_CLASS.get());
+                    insnList.add(new VarInsnNode(Opcodes.ALOAD, 0));
+                    insnList.add(new VarInsnNode(Opcodes.ALOAD, 1));
+                    insnList.add(executeBridge("onProxyEscape", "(Ljava/lang/Class;Ljava/lang/ClassLoader;[Ljava/lang/Class;)V"));
+                    met.instructions.insertBefore(met.instructions.getFirst(), insnList);
+                };
+                ASMModify.editMethodRE(node, "newProxyInstance", "(Ljava/lang/ClassLoader;[Ljava/lang/Class;Ljava/lang/reflect/InvocationHandler;)Ljava/lang/Object;", action);
+                ASMModify.editMethodRE(node, "getProxyClass", "(Ljava/lang/ClassLoader;[Ljava/lang/Class;)Ljava/lang/Class;", action);
+            });
             // endregion
         }
 

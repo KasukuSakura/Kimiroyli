@@ -2,18 +2,41 @@ package com.kasukusakura.kimiroyli.core;
 
 import com.kasukusakura.kimiroyli.api.log.Logger;
 import com.kasukusakura.kimiroyli.api.perm.Permission;
+import io.github.karlatemp.unsafeaccessor.UnsafeAccess;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.MethodInsnNode;
 
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.AccessibleObject;
+import java.lang.reflect.InaccessibleObjectException;
+import java.lang.reflect.Modifier;
 import java.nio.file.StandardOpenOption;
 import java.util.Set;
+import java.util.function.Supplier;
 
+@SuppressWarnings("unused")
 public class JdkRtBridge {
     private static final Logger LOGGER = Logger.getLogger("JdkRtBridge");
     private static final Class<?> SUN_MISC_UNSAFE = ModuleLayer.boot()
             .findModule("jdk.unsupported")
             .map(it -> Class.forName(it, "sun.misc.Unsafe"))
             .orElse(null);
+
+    public static final Supplier<MethodInsnNode> REFLECTION_GET_CALLER_CLASS = ((Supplier<Supplier<MethodInsnNode>>) () -> {
+        try {
+            var ua = UnsafeAccess.getInstance();
+            var javabase = Object.class.getModule();
+            var reflection = Class.forName(javabase, "jdk.internal.reflect.Reflection");
+            if (reflection == null) {
+                throw new ClassNotFoundException("Can't find Reflection");
+            }
+            ua.getTrustedIn(reflection).findStatic(reflection, "getCallerClass", MethodType.methodType(Class.class));
+            return () -> new MethodInsnNode(Opcodes.INVOKESTATIC, "jdk/internal/reflect/Reflection", "getCallerClass", "()Ljava/lang/Class;", false);
+        } catch (Throwable throwable) {
+            throw new ExceptionInInitializerError(throwable);
+        }
+    }).get();
 
     public static String BRIDGE;
 
@@ -102,10 +125,17 @@ public class JdkRtBridge {
     public static void mh$privateLookupIn(Class<?> target, MethodHandles.Lookup caller) throws IllegalAccessException {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("[REFLECTION] privateLookupIn: {} from {}", target, caller);
+        if (!isUnsafeAccess(target)) return;
         var rsp = checkUnsafeAccess(caller.lookupClass(), true, target);
         if (rsp != null) {
             throw new IllegalAccessException(rsp.toString());
         }
+
+    }
+
+    private static boolean isUnsafeAccess(Class<?> target) {
+        if (SUN_MISC_UNSAFE == null) return false;
+        return target.getModule() == SUN_MISC_UNSAFE.getModule();
     }
 
     private static Object checkUnsafeAccess(Class<?> caller, boolean doError, Object member) {
@@ -116,6 +146,33 @@ public class JdkRtBridge {
                 .append(member)
                 .append(" because unsafe access was limited.");
         return stringBuilder;
+    }
+
+    @SuppressWarnings("StringBufferReplaceableByString")
+    public static void onProxyEscape(Class<?> caller, ClassLoader cl, Class<?>[] classes) {
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("[java.lang.reflect.Proxy] newAccess: {}, {}; from: {}", cl, classes, caller);
+
+        if (classes == null) return; // error in java.base
+        var callerMod = caller.getModule();
+        for (var c : classes) {
+            if (c == null) continue;
+            var targetModule = c.getModule();
+            var pkg = c.getPackageName();
+
+            if (Modifier.isPublic(c.getModifiers()) && targetModule.isExported(pkg, callerMod)) continue;
+
+            if (targetModule.isOpen(pkg, callerMod)) continue;
+
+            var msg = new StringBuilder("class access check failed: ");
+            msg.append(caller).append(" (in ").append(callerMod).append(") ");
+            msg.append("cannot access ").append(c).append(" (in ").append(targetModule).append(") ");
+            msg.append("because ").append(targetModule).append(" does not ");
+            msg.append(Modifier.isPublic(c.getModifiers()) ? "export " : "open ");
+            msg.append(pkg).append(" to ");
+            msg.append(callerMod);
+            throw new InaccessibleObjectException(msg.toString());
+        }
     }
 
     public static Class<?> tryResolveApi(String name) {
