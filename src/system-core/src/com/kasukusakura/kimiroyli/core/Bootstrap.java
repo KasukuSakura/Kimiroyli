@@ -18,6 +18,7 @@ import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
+import java.lang.invoke.LambdaMetafactory;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Modifier;
@@ -28,7 +29,6 @@ import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -117,15 +117,21 @@ public class Bootstrap {
                     .collect(Collectors.toSet());
             var internalPkg = emitPkgs.iterator().next();
             Root.getModuleAccess().addExports(javaBase, internalPkg, Bootstrap.class.getModule());
+            var lookup = MethodHandles.lookup();
 
             var frontendName = internalPkg.replace('.', '/') + "/KimiroyliFT";
-            var backendName = "com/kasukusakura/kimiroyli/core/KimiroyliBT$" + UUID.randomUUID();
+            var backendName = "com/kasukusakura/kimiroyli/core/$KimiroyliBE";
             var frontendNameL = "L" + frontendName + ";";
             var frontendWriter = new ClassWriter(ClassWriter.COMPUTE_MAXS);
             var backendWriter = new ClassWriter(ClassWriter.COMPUTE_MAXS);
 
             frontendWriter.visit(Opcodes.V11, Opcodes.ACC_PUBLIC | Opcodes.ACC_ABSTRACT, frontendName, null, "java/lang/Object", null);
             backendWriter.visit(Opcodes.V11, Opcodes.ACC_FINAL, backendName, null, frontendName, null);
+            {
+                var src = "Kimiroyli.git";
+                frontendWriter.visitSource(src, null);
+                backendWriter.visitSource(src, null);
+            }
             {
                 var init0 = frontendWriter.visitMethod(Opcodes.ACC_PROTECTED, "<init>", "()V", null, null);
                 init0.visitVarInsn(Opcodes.ALOAD, 0);
