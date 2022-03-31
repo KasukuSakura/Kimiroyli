@@ -6,9 +6,11 @@ import com.kasukusakura.kimiroyli.api.perm.StandardPermissions;
 
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 import static com.kasukusakura.kimiroyli.core.perm.PermManager.CTX;
 
@@ -49,7 +51,7 @@ public class PermCtxImpl extends PermissionContext {
     }
 
     @Override
-    public <T> T dropPermissions(Predicate<Permission> filter, PrivilegedAction<T> action) {
+    public <T> T runWithout(Predicate<Permission> filter, PrivilegedAction<T> action) {
         var newPerms = (ArrayList<Permission>) permissions.clone();
         newPerms.removeIf(filter);
         var old = CTX.get();
@@ -62,7 +64,7 @@ public class PermCtxImpl extends PermissionContext {
     }
 
     @Override
-    public <T> T takePermissions(PrivilegedAction<T> action) {
+    public <T> T runWith(PrivilegedAction<T> action) {
         var newPerms = PermManager.calcCallerPermissions();
         newPerms.addAll(0, permissions);
         var old = CTX.get();
@@ -75,7 +77,7 @@ public class PermCtxImpl extends PermissionContext {
     }
 
     @Override
-    public <T> T takePermissions(Predicate<Permission> filter, PrivilegedAction<T> action) {
+    public <T> T runWith(Predicate<Permission> filter, PrivilegedAction<T> action) {
         var newPerms = PermManager.calcCallerPermissions();
         newPerms.removeIf(filter);
         newPerms.addAll(0, permissions);
@@ -86,6 +88,24 @@ public class PermCtxImpl extends PermissionContext {
         } finally {
             CTX.set(old);
         }
+    }
+
+    @Override
+    public <T> T runWith(Collection<Permission> perms, PrivilegedAction<T> action) {
+        if (perms == null) return action.run();
+        if (permissions.contains(StandardPermissions.ROOT)) {
+            var nw = (ArrayList<Permission>) permissions.clone();
+            nw.addAll(perms);
+
+            var old = CTX.get();
+            try {
+                CTX.set(new PermCtxImpl(nw));
+                return action.run();
+            } finally {
+                CTX.set(old);
+            }
+        }
+        return runWith(perms::contains, action);
     }
 
     @Override
@@ -100,5 +120,32 @@ public class PermCtxImpl extends PermissionContext {
         } finally {
             CTX.set(old);
         }
+    }
+
+    @Override
+    public <T> T runAs(Predicate<Permission> filter, PrivilegedAction<T> action) {
+        var newPerms = PermManager.calcCallerPermissions();
+        newPerms.removeIf(filter);
+        var old = CTX.get();
+        try {
+            CTX.set(new PermCtxImpl(newPerms));
+            return action.run();
+        } finally {
+            CTX.set(old);
+        }
+    }
+
+    @Override
+    public <T> T runAs(Collection<Permission> permissions, PrivilegedAction<T> action) {
+        if (permissions.contains(StandardPermissions.ROOT)) {
+            var old = CTX.get();
+            try {
+                CTX.set(new PermCtxImpl(new ArrayList<>(permissions)));
+                return action.run();
+            } finally {
+                CTX.set(old);
+            }
+        }
+        return runAs(permissions::contains, action);
     }
 }

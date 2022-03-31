@@ -13,4 +13,6 @@ public abstract class ImplBridge {
 
     public abstract void permit(Object obj, Permission perm);
     public abstract void revoke(Object obj, Permission perm);
+
+    public abstract PermissionContext myPermissions();
 }

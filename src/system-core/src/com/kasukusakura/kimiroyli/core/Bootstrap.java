@@ -220,6 +220,7 @@ public class Bootstrap {
         {
             PermManager.PERMITTED_TO_THREAD_GROUP.put(Threads.JVM_SECURITY, List.of(StandardPermissions.ROOT));
             PermManager.PERMITTED_TO_THREAD_GROUP.put(Threads.ROOT, List.of(StandardPermissions.ROOT));
+            // Thread: main
             PermManager.CTX.set(new PermCtxImpl(new ArrayList<>(List.of(StandardPermissions.ROOT))));
         }
 

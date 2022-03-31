@@ -3,16 +3,16 @@ package com.kasukusakura.kimiroyli.core.perm;
 import com.kasukusakura.kimiroyli.api.perm.Permission;
 
 import java.security.ProtectionDomain;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.WeakHashMap;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 public class PermManager {
-    public static final StackWalker WALKER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
+    public static final StackWalker WALKER = StackWalker.getInstance(
+            Set.of(StackWalker.Option.RETAIN_CLASS_REFERENCE),
+            5
+    );
 
     public static final WeakHashMap<Module, List<Permission>> PERMITTED_TO_MODULES = new WeakHashMap<>();
     public static final WeakHashMap<ClassLoader, List<Permission>> PERMITTED_TO_CLASS_LOADER = new WeakHashMap<>();

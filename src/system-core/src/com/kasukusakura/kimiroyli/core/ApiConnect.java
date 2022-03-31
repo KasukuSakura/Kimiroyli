@@ -4,6 +4,7 @@ import com.kasukusakura.kimiroyli.api.internal.ImplBridge;
 import com.kasukusakura.kimiroyli.api.perm.Permission;
 import com.kasukusakura.kimiroyli.api.perm.PermissionContext;
 import com.kasukusakura.kimiroyli.api.perm.StandardPermissions;
+import com.kasukusakura.kimiroyli.core.perm.PermCtxImpl;
 import com.kasukusakura.kimiroyli.core.perm.PermManager;
 
 import java.security.ProtectionDomain;
@@ -46,5 +47,11 @@ public class ApiConnect extends ImplBridge {
         var pms = findPermMap(obj).get(obj);
         if (pms == null) return;
         pms.remove(perm);
+    }
+
+    @Override
+    public PermissionContext myPermissions() {
+        var perms = PermManager.calcCallerPermissions();
+        return new PermCtxImpl(perms);
     }
 }

@@ -2,6 +2,8 @@ package com.kasukusakura.kimiroyli.core;
 
 import com.kasukusakura.kimiroyli.api.log.Logger;
 import com.kasukusakura.kimiroyli.api.perm.Permission;
+import com.kasukusakura.kimiroyli.api.perm.PermissionContext;
+import com.kasukusakura.kimiroyli.api.perm.StandardPermissions;
 import io.github.karlatemp.unsafeaccessor.UnsafeAccess;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.MethodInsnNode;
@@ -111,7 +113,7 @@ public class JdkRtBridge {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("[REFLECTION] SetAccessible: {} from {}", ao, caller);
 
-        if (declared == SUN_MISC_UNSAFE) {
+        if (isUnsafeAccess(declared)) {
             var rsp = checkUnsafeAccess(caller, throwIfException, ao);
             if (rsp != null) {
                 if (throwIfException) throw new java.lang.reflect.InaccessibleObjectException(rsp.toString());
@@ -135,7 +137,10 @@ public class JdkRtBridge {
 
     private static boolean isUnsafeAccess(Class<?> target) {
         if (SUN_MISC_UNSAFE == null) return false;
-        return target.getModule() == SUN_MISC_UNSAFE.getModule();
+        if (target.getModule() == SUN_MISC_UNSAFE.getModule()) {
+            return !PermissionContext.currentContext().hasPermission(StandardPermissions.SUN_MISC_UNSAFE);
+        }
+        return false;
     }
 
     private static Object checkUnsafeAccess(Class<?> caller, boolean doError, Object member) {
@@ -154,6 +159,10 @@ public class JdkRtBridge {
             LOGGER.debug("[java.lang.reflect.Proxy] newAccess: {}, {}; from: {}", cl, classes, caller);
 
         if (classes == null) return; // error in java.base
+
+        if (PermissionContext.currentContext().hasPermission(StandardPermissions.SUN_MISC_UNSAFE))
+            return;
+
         var callerMod = caller.getModule();
         for (var c : classes) {
             if (c == null) continue;
@@ -189,10 +198,20 @@ public class JdkRtBridge {
     public static void onCLibLink(Class<?> caller, String lib, boolean isLoadLibrary) {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("[System] onCLibLink: caller: {}, lib: {}, loadLib: {}", caller, lib, isLoadLibrary);
+
+        if (PermissionContext.currentContext().hasPermission(StandardPermissions.NATIVE_LIBRARY_LINK))
+            return;
+
+        throw new UnsatisfiedLinkError("Permission denied: Missing permission `NATIVE_LIBRARY_LINK`");
     }
 
     public static void onShutdown(int code, boolean isHalt) {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("[System] onExit: {}, isHalt={}", code, isHalt);
+
+        if (PermissionContext.currentContext().hasPermission(StandardPermissions.SHUTDOWN))
+            return;
+
+        throw new SecurityException("Permission denied: Missing permission `SHUTDOWN`");
     }
 }
