@@ -79,7 +79,7 @@ public class PermCtxImpl extends PermissionContext {
     @Override
     public <T> T runWith(Predicate<Permission> filter, PrivilegedAction<T> action) {
         var newPerms = PermManager.calcCallerPermissions();
-        newPerms.removeIf(filter);
+        newPerms.removeIf(filter.negate());
         newPerms.addAll(0, permissions);
         var old = CTX.get();
         try {
@@ -125,7 +125,7 @@ public class PermCtxImpl extends PermissionContext {
     @Override
     public <T> T runAs(Predicate<Permission> filter, PrivilegedAction<T> action) {
         var newPerms = PermManager.calcCallerPermissions();
-        newPerms.removeIf(filter);
+        newPerms.removeIf(filter.negate());
         var old = CTX.get();
         try {
             CTX.set(new PermCtxImpl(newPerms));
