@@ -2,16 +2,26 @@ package com.kasukusakura.kimiroyli.test;
 
 import com.kasukusakura.kimiroyli.api.perm.PermissionContext;
 import com.kasukusakura.kimiroyli.api.perm.StandardPermissions;
+import org.junit.jupiter.api.Assertions;
 import sun.misc.Unsafe;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Proxy;
+import java.net.ConnectException;
+import java.net.Socket;
+import java.net.URI;
+import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.security.PrivilegedAction;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.Executors;
 
 @SuppressWarnings({"deprecation", "ThrowablePrintedToSystemOut"})
 public class Testing {
@@ -27,6 +37,8 @@ public class Testing {
 
     public static void main(String[] args) throws Throwable {
         System.out.println("[TESTING] Executed");
+        var testingModule = Testing.class.getModule();
+        System.setErr(System.out);
         /*var allStackTraces = Thread.getAllStackTraces();
         for (var thread : allStackTraces.keySet()) {
             System.out.println(thread);
@@ -44,53 +56,92 @@ public class Testing {
 
         PermissionContext.currentContext().runAs(List.of(), ew(() -> {
 
-            try {
-                System.load(new File("A").getAbsolutePath());
-                throw new AssertionError();
-            } catch (UnsatisfiedLinkError e) {
-                System.out.println(e);
-            }
-            try {
-                System.loadLibrary("A");
-                throw new AssertionError();
-            } catch (UnsatisfiedLinkError e) {
-                System.out.println(e);
-            }
+            Assertions.assertThrowsExactly(
+                    UnsatisfiedLinkError.class,
+                    () -> System.load(new File("A").getAbsolutePath()),
+                    "Permission denied: Missing permission `NATIVE_LIBRARY_LINK`"
+            );
+            Assertions.assertThrowsExactly(
+                    UnsatisfiedLinkError.class,
+                    () -> System.loadLibrary("A"),
+                    "Permission denied: Missing permission `NATIVE_LIBRARY_LINK`"
+            );
 
-            try {
-                MethodHandles.privateLookupIn(Unsafe.class, MethodHandles.lookup());
-                throw new AssertionError();
-            } catch (IllegalAccessException e) {
-                System.out.println(e);
-            }
-            try {
-                Unsafe.class.getDeclaredField("theUnsafe").setAccessible(true);
-                throw new AssertionError();
-            } catch (InaccessibleObjectException e) {
-                System.out.println(e);
-            }
-            if (Unsafe.class.getDeclaredField("theUnsafe").trySetAccessible()) {
-                throw new AssertionError();
-            }
+            Assertions.assertThrowsExactly(
+                    IllegalAccessException.class,
+                    () -> MethodHandles.privateLookupIn(Unsafe.class, MethodHandles.lookup()),
+                    "class com.kasukusakura.kimiroyli.test.Testing cannot access class sun.misc.Unsafe because unsafe access was limited."
+            );
+            Assertions.assertThrowsExactly(
+                    InaccessibleObjectException.class,
+                    () -> Unsafe.class.getDeclaredField("theUnsafe").setAccessible(true),
+                    "class com.kasukusakura.kimiroyli.test.Testing cannot access private static final sun.misc.Unsafe sun.misc.Unsafe.theUnsafe because unsafe access was limited."
+            );
+            Assertions.assertFalse(
+                    Unsafe.class.getDeclaredField("theUnsafe").trySetAccessible()
+            );
 
-            try {
-                var pxy = Proxy.getProxyClass(Testing.class.getClassLoader(), Class.forName("jdk.internal.access.JavaLangAccess"));
-                System.err.println(pxy);
-                throw new AssertionError();
-            } catch (InaccessibleObjectException e) {
-                System.out.println(e);
-            }
-            try {
-                Runtime.getRuntime().exit(0);
-                throw new AssertionError();
-            } catch (SecurityException se) {
-                System.out.println(se);
-            }
+            Assertions.assertThrowsExactly(
+                    InaccessibleObjectException.class,
+                    () -> Proxy.getProxyClass(Testing.class.getClassLoader(), Class.forName("jdk.internal.access.JavaLangAccess")),
+                    "class access check failed: class com.kasukusakura.kimiroyli.test.Testing (in " + testingModule + ") cannot access interface jdk.internal.access.JavaLangAccess (in module java.base) because module java.base does not export jdk.internal.access to " + testingModule
+            );
+            Assertions.assertThrowsExactly(
+                    SecurityException.class,
+                    () -> Runtime.getRuntime().exit(9),
+                    "Permission denied: Missing permission `SHUTDOWN`"
+            );
+            Assertions.assertThrowsExactly(
+                    SecurityException.class,
+                    () -> Runtime.getRuntime().halt(9),
+                    "Permission denied: Missing permission `SHUTDOWN`"
+            );
+            Assertions.assertThrowsExactly(
+                    SecurityException.class,
+                    () -> System.exit(9),
+                    "Permission denied: Missing permission `SHUTDOWN`"
+            );
             return null;
         }));
 
         Unsafe.class.getDeclaredField("theUnsafe").setAccessible(true);
         MethodHandles.privateLookupIn(Unsafe.class, MethodHandles.lookup());
+
+        { // Network
+            PermissionContext.currentContext().runAs(List.of(), ew(() -> {
+                Assertions.assertThrowsExactly(
+                        ConnectException.class,
+                        () -> new Socket("::1", 9154),
+                        "Can't connect /[0:0:0:0:0:0:0:1]:9154 because current context don't have network permission"
+                );
+
+                Assertions.assertThrowsExactly(
+                        ConnectException.class,
+                        () -> new URL("http://[::1]:80").openConnection().connect(),
+                        "Can't connect /[0:0:0:0:0:0:0:1]:80 because current context don't have network permission"
+                );
+                return null;
+            }));
+            var exec = Executors.newFixedThreadPool(1);
+            try {
+                var httpC = HttpClient.newBuilder()
+                        .executor(exec)
+                        .build();
+                Assertions.assertThrows(
+                        IOException.class,
+                        () -> httpC.send(
+                                HttpRequest.newBuilder()
+                                        .GET()
+                                        .uri(URI.create("http://[::1]"))
+                                        .build(),
+                                HttpResponse.BodyHandlers.discarding()
+                        ),
+                        "Can't connect /[0:0:0:0:0:0:0:1]:80 because current context don't have network permission"
+                );
+            } finally {
+                exec.shutdown();
+            }
+        }
 
         Runtime.getRuntime().exit(0);
     }

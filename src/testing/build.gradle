@@ -1,5 +1,6 @@
 dependencies {
     compileOnly project(':kimiroyli-api')
+    implementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
 }
 
 tasks.register('launchTest', JavaExec.class) { exec ->
