@@ -7,4 +7,5 @@ public enum StandardPermissions implements Permission {
     FILE_SYSTEM_ACCESS,
     NATIVE_LIBRARY_LINK,
     SHUTDOWN,
+    NETWORK,
 }

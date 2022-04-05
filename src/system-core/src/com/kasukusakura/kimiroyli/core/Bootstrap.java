@@ -11,6 +11,7 @@ import io.github.karlatemp.unsafeaccessor.Unsafe;
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 
+import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.RandomAccessFile;
@@ -18,11 +19,12 @@ import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
-import java.lang.invoke.LambdaMetafactory;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
+import java.net.InetAddress;
 import java.nio.file.Paths;
 import java.nio.file.spi.FileSystemProvider;
 import java.security.ProtectionDomain;
@@ -361,6 +363,25 @@ public class Bootstrap {
             //endregion
 
             //region Network (WIP)
+            // TCP
+            trans.modify(Class.forName("sun.net.NetHooks"), true, node -> {
+                var desc = MethodType.methodType(
+                        void.class,
+                        FileDescriptor.class,
+                        InetAddress.class,
+                        int.class
+                ).toMethodDescriptorString();
+                RunAnyLambda<MethodNode> editor = met -> {
+                    var insn = new InsnList();
+                    insn.add(new VarInsnNode(Opcodes.ALOAD, 0));
+                    insn.add(new VarInsnNode(Opcodes.ALOAD, 1));
+                    insn.add(new VarInsnNode(Opcodes.ILOAD, 2));
+                    insn.add(executeBridge("net$" + met.name, desc));
+                    met.instructions.insertBefore(met.instructions.getFirst(), insn);
+                };
+                ASMModify.editMethodRE(node, "beforeTcpBind", desc, editor);
+                ASMModify.editMethodRE(node, "beforeTcpConnect", desc, editor);
+            });
             //endregion
 
             // region System.loadLibrary & System.exit

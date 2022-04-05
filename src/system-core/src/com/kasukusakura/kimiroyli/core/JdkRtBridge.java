@@ -4,15 +4,22 @@ import com.kasukusakura.kimiroyli.api.log.Logger;
 import com.kasukusakura.kimiroyli.api.perm.Permission;
 import com.kasukusakura.kimiroyli.api.perm.PermissionContext;
 import com.kasukusakura.kimiroyli.api.perm.StandardPermissions;
+import com.kasukusakura.kimiroyli.api.utils.StringFormatable;
 import io.github.karlatemp.unsafeaccessor.UnsafeAccess;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.MethodInsnNode;
 
+import java.io.FileDescriptor;
+import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Modifier;
+import java.net.BindException;
+import java.net.ConnectException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.file.StandardOpenOption;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -213,5 +220,37 @@ public class JdkRtBridge {
             return;
 
         throw new SecurityException("Permission denied: Missing permission `SHUTDOWN`");
+    }
+
+    public static void net$beforeTcpConnect(
+            FileDescriptor fdObj,
+            InetAddress address,
+            int port
+    ) throws IOException {
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("[NETWORK] [TCP] [before connect] {}:{}", address, port);
+
+        if (!PermissionContext.currentContext().hasPermission(StandardPermissions.NETWORK)) {
+            throw new ConnectException(StringFormatable.format(
+                    "Can't connect {}:{} because current context don't have network permission",
+                    MiscKit.ipv6format(address), port
+            ));
+        }
+    }
+
+    public static void net$beforeTcpBind(
+            FileDescriptor fdObj,
+            InetAddress address,
+            int port
+    ) throws IOException {
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("[NETWORK] [TCP] [before bind   ] {}:{}", address, port);
+
+        if (!PermissionContext.currentContext().hasPermission(StandardPermissions.NETWORK)) {
+            throw new BindException(StringFormatable.format(
+                    "Can't connect {}:{} because current context don't have network permission",
+                    MiscKit.ipv6format(address), port
+            ));
+        }
     }
 }
