@@ -382,6 +382,37 @@ public class Bootstrap {
                 ASMModify.editMethodRE(node, "beforeTcpBind", desc, editor);
                 ASMModify.editMethodRE(node, "beforeTcpConnect", desc, editor);
             });
+            // UDP
+            trans.modify(Class.forName("sun.nio.ch.DatagramChannelImpl"), false, node -> {
+                ASMModify.editMethodRE(node, "bindInternal", "(Ljava/net/SocketAddress;)V", met -> {
+                    var insn = new InsnList();
+                    insn.add(new VarInsnNode(Opcodes.ALOAD, 1));
+                    insn.add(executeBridge("net$udpBind", "(Ljava/net/SocketAddress;)V"));
+                    met.instructions.insertBefore(met.instructions.getFirst(), insn);
+                });
+                // DatagramChannel connect(SocketAddress sa, boolean check)
+                var desc = MethodType.methodType(
+                        java.nio.channels.DatagramChannel.class,
+                        java.net.SocketAddress.class,
+                        boolean.class
+                ).toMethodDescriptorString();
+                ASMModify.editMethodRE(node, "connect", desc, met -> {
+                    var checkAddress = StreamSupport.stream(met.instructions.spliterator(), false)
+                            .<MethodInsnNode>flatMap(insnNode -> {
+                                if (insnNode instanceof MethodInsnNode) return Stream.of((MethodInsnNode) insnNode);
+                                return Stream.empty();
+                            })
+                            .filter(it -> it.owner.equals("sun/nio/ch/Net"))
+                            .filter(it -> it.name.equals("checkAddress"))
+                            .filter(it -> it.desc.equals("(Ljava/net/SocketAddress;Ljava/net/ProtocolFamily;)Ljava/net/InetSocketAddress;"))
+                            .findFirst()
+                            .orElseThrow();
+                    var insnList = new InsnList();
+                    insnList.add(new InsnNode(Opcodes.DUP));
+                    insnList.add(executeBridge("net$udpConnect", "(Ljava/net/InetSocketAddress;)V"));
+                    met.instructions.insert(checkAddress, insnList);
+                });
+            });
             //endregion
 
             // region System.loadLibrary & System.exit

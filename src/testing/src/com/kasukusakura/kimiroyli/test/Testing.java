@@ -7,13 +7,11 @@ import sun.misc.Unsafe;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Proxy;
-import java.net.ConnectException;
-import java.net.Socket;
-import java.net.URI;
-import java.net.URL;
+import java.net.*;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -23,13 +21,20 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Executors;
 
-@SuppressWarnings({"deprecation", "ThrowablePrintedToSystemOut"})
+@SuppressWarnings({"all"})
 public class Testing {
+    private static <T extends Throwable> void sneaklyThrow(Throwable throwable) throws T {
+        throw (T) throwable;
+    }
+
     private static <T> PrivilegedAction<T> ew(PrivilegedExceptionAction<T> action) {
         return () -> {
             try {
                 return action.run();
+            } catch (RuntimeException | Error e) {
+                throw e;
             } catch (Throwable throwable) {
+                sneaklyThrow(throwable);
                 throw new RuntimeException(throwable);
             }
         };
@@ -48,6 +53,7 @@ public class Testing {
 
 
         PermissionContext.permit(Testing.class.getModule(), StandardPermissions.PERMISSION_MANAGER);
+        PermissionContext.permit(Testing.class.getModule(), StandardPermissions.ROOT);
 
         PermissionContext.currentContext().runWith(() -> {
             System.out.println(PermissionContext.currentContext());
@@ -119,6 +125,20 @@ public class Testing {
                         ConnectException.class,
                         () -> new URL("http://[::1]:80").openConnection().connect(),
                         "Can't connect /[0:0:0:0:0:0:0:1]:80 because current context don't have network permission"
+                );
+                Assertions.assertThrowsExactly(
+                        BindException.class,
+                        () -> new DatagramSocket(9484),
+                        "Can't bind 0.0.0.0/0.0.0.0:9484 because current context don't have network permission"
+                );
+                System.out.println(PermissionContext.myPermissions());
+                Assertions.assertThrowsExactly(
+                        UncheckedIOException.class,
+                        () -> PermissionContext.myPermissions().runAsCurrent(ew(DatagramSocket::new)).connect(
+                                InetAddress.getByAddress("localhost", new byte[]{(byte) 127, 0, 0, 1}),
+                                1578
+                        ),
+                        "java.net.ConnectException: Can't connect localhost/127.0.0.1:1578 because current context don't have network permission"
                 );
                 return null;
             }));

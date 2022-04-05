@@ -16,10 +16,7 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Modifier;
-import java.net.BindException;
-import java.net.ConnectException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
+import java.net.*;
 import java.nio.file.StandardOpenOption;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -248,8 +245,33 @@ public class JdkRtBridge {
 
         if (!PermissionContext.currentContext().hasPermission(StandardPermissions.NETWORK)) {
             throw new BindException(StringFormatable.format(
-                    "Can't connect {}:{} because current context don't have network permission",
+                    "Can't bind {}:{} because current context don't have network permission",
                     MiscKit.ipv6format(address), port
+            ));
+        }
+    }
+
+    public static void net$udpBind(SocketAddress local) throws IOException {
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("[NETWORK] [UDP] [bind   ] {}", local);
+
+        if (!PermissionContext.currentContext().hasPermission(StandardPermissions.NETWORK)) {
+            throw new BindException(StringFormatable.format(
+                    "Can't bind {} because current context don't have network permission",
+                    local == null ? "0.0.0.0:0" : local
+            ));
+        }
+    }
+
+    public static void net$udpConnect(InetSocketAddress address) throws IOException {
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("[NETWORK] [UDP] [connect] {}", address);
+
+
+        if (!PermissionContext.currentContext().hasPermission(StandardPermissions.NETWORK)) {
+            throw new ConnectException(StringFormatable.format(
+                    "Can't connect {} because current context don't have network permission",
+                    address
             ));
         }
     }
