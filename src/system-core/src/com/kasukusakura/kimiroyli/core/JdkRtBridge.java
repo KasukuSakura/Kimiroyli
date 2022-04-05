@@ -5,6 +5,7 @@ import com.kasukusakura.kimiroyli.api.perm.Permission;
 import com.kasukusakura.kimiroyli.api.perm.PermissionContext;
 import com.kasukusakura.kimiroyli.api.perm.StandardPermissions;
 import com.kasukusakura.kimiroyli.api.utils.StringFormatable;
+import com.kasukusakura.kimiroyli.core.perm.PermManager;
 import io.github.karlatemp.unsafeaccessor.UnsafeAccess;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.MethodInsnNode;
@@ -19,15 +20,74 @@ import java.lang.reflect.Modifier;
 import java.net.*;
 import java.nio.file.StandardOpenOption;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 @SuppressWarnings("unused")
 public class JdkRtBridge {
     private static final Logger LOGGER = Logger.getLogger("JdkRtBridge");
+    private static final StackWalker WALKER = PermManager.WALKER;
     private static final Class<?> SUN_MISC_UNSAFE = ModuleLayer.boot()
             .findModule("jdk.unsupported")
             .map(it -> Class.forName(it, "sun.misc.Unsafe"))
             .orElse(null);
+    private static final Function<Stream<StackWalker.StackFrame>, Boolean>
+            IS_JAVA_REFLECT_DELEGATING_CLASSLOADER_INIT,
+            IS_JAVA_RUNTIME_INITIALIZATION;
+
+    static {
+        class IsRefClassLoaderInit implements
+                Function<Stream<StackWalker.StackFrame>, Boolean>,
+                Predicate<StackWalker.StackFrame> {
+            @Override
+            public Boolean apply(Stream<StackWalker.StackFrame> stream) {
+                var frameOptional = stream.skip(3)
+                        .filter(this) // Skip java.lang.ClassLoader.<init>
+                        .findFirst();
+                if (frameOptional.isEmpty()) return Boolean.FALSE;
+                var frame = frameOptional.get();
+                var klass = frame.getDeclaringClass();
+                if (klass.getModule() != Object.class.getModule()) return Boolean.FALSE;
+
+                return klass.getName().endsWith(".DelegatingClassLoader");
+            }
+
+            @Override
+            public boolean test(StackWalker.StackFrame stackFrame) {
+                if (stackFrame.getDeclaringClass() == ClassLoader.class) {
+                    return !stackFrame.getMethodName().equals("<init>");
+                }
+                return true;
+            }
+        }
+
+        class IsJavaRuntimeInitialization implements
+                Function<Stream<StackWalker.StackFrame>, Boolean>,
+                Predicate<StackWalker.StackFrame> {
+            private final ModuleLayer BOOT = ModuleLayer.boot();
+
+            @SuppressWarnings("OptionalIsPresent")
+            @Override
+            public Boolean apply(Stream<StackWalker.StackFrame> stream) {
+                var frameOptional = stream.skip(3).filter(this).findFirst();
+                if (frameOptional.isPresent()) {
+                    return frameOptional.get().getDeclaringClass().getModule().getLayer() == BOOT;
+                }
+                return Boolean.FALSE;
+            }
+
+            @Override
+            public boolean test(StackWalker.StackFrame stackFrame) {
+                var c = stackFrame.getDeclaringClass();
+                if (c.getModule().getLayer() != BOOT) return true;
+                return stackFrame.getMethodName().equals("<clinit>");
+            }
+        }
+        IS_JAVA_REFLECT_DELEGATING_CLASSLOADER_INIT = new IsRefClassLoaderInit();
+        IS_JAVA_RUNTIME_INITIALIZATION = new IsJavaRuntimeInitialization();
+    }
 
     public static final Supplier<MethodInsnNode> REFLECTION_GET_CALLER_CLASS = ((Supplier<Supplier<MethodInsnNode>>) () -> {
         try {
@@ -58,6 +118,12 @@ public class JdkRtBridge {
     }
 
     public static void newClassLoaderCheck() {
+        if (WALKER.walk(IS_JAVA_RUNTIME_INITIALIZATION)) return;
+        if (WALKER.walk(IS_JAVA_REFLECT_DELEGATING_CLASSLOADER_INIT)) {
+            // java.lang.reflect MethodAccessors init
+            return;
+        }
+
         if (LOGGER.isDebugEnabled()) {
             var track = new Throwable("New ClassLoader: act from " + Thread.currentThread());
             LOGGER.debug(null, track);
@@ -65,6 +131,8 @@ public class JdkRtBridge {
     }
 
     public static void ThreadGroup$checkAccess(ThreadGroup thiz) {
+        if (WALKER.walk(IS_JAVA_RUNTIME_INITIALIZATION)) return;
+
         if (LOGGER.isDebugEnabled()) {
             var track = new Throwable("ThreadGroup.checkAccess(): " + thiz);
             LOGGER.debug(null, track);
@@ -200,6 +268,8 @@ public class JdkRtBridge {
      * @param isLoadLibrary false: System.load
      */
     public static void onCLibLink(Class<?> caller, String lib, boolean isLoadLibrary) {
+        if (WALKER.walk(IS_JAVA_RUNTIME_INITIALIZATION)) return;
+
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("[System] onCLibLink: caller: {}, lib: {}, loadLib: {}", caller, lib, isLoadLibrary);
 
