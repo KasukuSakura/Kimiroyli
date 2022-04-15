@@ -4,6 +4,7 @@ import com.kasukusakura.kimiroyli.api.internal.ImplBridge;
 import com.kasukusakura.kimiroyli.api.perm.Permission;
 import com.kasukusakura.kimiroyli.api.perm.PermissionContext;
 import com.kasukusakura.kimiroyli.api.perm.StandardPermissions;
+import com.kasukusakura.kimiroyli.core.control.ControlServices;
 import com.kasukusakura.kimiroyli.core.perm.PermCtxImpl;
 import com.kasukusakura.kimiroyli.core.perm.PermManager;
 
@@ -53,5 +54,17 @@ public class ApiConnect extends ImplBridge {
     public PermissionContext myPermissions() {
         var perms = PermManager.calcCallerPermissions();
         return new PermCtxImpl(perms);
+    }
+
+    @Override
+    public void regCtrService(Class<?> klass, Object instance) {
+        PermManager.CTX.get().checkPermission(StandardPermissions.ROOT);
+        ControlServices.reg(klass, instance);
+    }
+
+    @Override
+    public Object getService(Class<?> klass) {
+        PermManager.CTX.get().checkPermission(StandardPermissions.ROOT);
+        return ControlServices.get(klass);
     }
 }

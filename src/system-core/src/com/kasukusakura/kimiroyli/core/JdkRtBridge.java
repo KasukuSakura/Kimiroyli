@@ -4,7 +4,7 @@ import com.kasukusakura.kimiroyli.api.log.Logger;
 import com.kasukusakura.kimiroyli.api.perm.Permission;
 import com.kasukusakura.kimiroyli.api.perm.PermissionContext;
 import com.kasukusakura.kimiroyli.api.perm.StandardPermissions;
-import com.kasukusakura.kimiroyli.api.utils.StringFormatable;
+import com.kasukusakura.kimiroyli.core.control.ControlServices;
 import com.kasukusakura.kimiroyli.core.perm.PermManager;
 import io.github.karlatemp.unsafeaccessor.UnsafeAccess;
 import org.objectweb.asm.Opcodes;
@@ -17,7 +17,9 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Modifier;
-import java.net.*;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.file.StandardOpenOption;
 import java.util.Set;
 import java.util.function.Function;
@@ -115,6 +117,8 @@ public class JdkRtBridge {
             var track = new Throwable("New Thread Check: act from " + Thread.currentThread());
             LOGGER.debug(null, track);
         }
+
+        ControlServices.SYSTEM_CONTROL.onNewThread();
     }
 
     public static void newClassLoaderCheck() {
@@ -128,6 +132,8 @@ public class JdkRtBridge {
             var track = new Throwable("New ClassLoader: act from " + Thread.currentThread());
             LOGGER.debug(null, track);
         }
+
+        ControlServices.SYSTEM_CONTROL.onNewClassLoader();
     }
 
     public static void ThreadGroup$checkAccess(ThreadGroup thiz) {
@@ -137,24 +143,32 @@ public class JdkRtBridge {
             var track = new Throwable("ThreadGroup.checkAccess(): " + thiz);
             LOGGER.debug(null, track);
         }
+
+        ControlServices.SYSTEM_CONTROL.onThreadGroup_checkAccess(thiz);
     }
 
-    public static void file$read(Object arg) {
+    public static void file$read(Object arg) throws IOException {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("FS Read: {}", arg);
+
+        ControlServices.FILE_ACCESS_CONTROL.onFileRead(arg);
     }
 
-    public static void file$write(Object arg) {
+    public static void file$write(Object arg) throws IOException {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("FS Write: {}", arg);
+
+        ControlServices.FILE_ACCESS_CONTROL.onFileWrite(arg);
     }
 
-    public static void file$raf(Object file, String mode) {
+    public static void file$raf(Object file, String mode) throws IOException {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("new RandomAccessFile: {} <- {}", file, mode);
+
+        ControlServices.FILE_ACCESS_CONTROL.onNewRandomAccessFile(file, mode);
     }
 
-    public static void file$niochannel(Object file, Set<?> options) {
+    public static void file$niochannel(Object file, Set<?> options) throws IOException {
         var read = false;
         var write = false;
         for (var opt : options) {
@@ -273,20 +287,14 @@ public class JdkRtBridge {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("[System] onCLibLink: caller: {}, lib: {}, loadLib: {}", caller, lib, isLoadLibrary);
 
-        if (PermissionContext.currentContext().hasPermission(StandardPermissions.NATIVE_LIBRARY_LINK))
-            return;
-
-        throw new UnsatisfiedLinkError("Permission denied: Missing permission `NATIVE_LIBRARY_LINK`");
+        ControlServices.SYSTEM_CONTROL.onNativeLink(caller, isLoadLibrary, lib);
     }
 
     public static void onShutdown(int code, boolean isHalt) {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("[System] onExit: {}, isHalt={}", code, isHalt);
 
-        if (PermissionContext.currentContext().hasPermission(StandardPermissions.SHUTDOWN))
-            return;
-
-        throw new SecurityException("Permission denied: Missing permission `SHUTDOWN`");
+        ControlServices.SYSTEM_CONTROL.onInitiativeShutdown(code, isHalt);
     }
 
     public static void net$beforeTcpConnect(
@@ -297,12 +305,7 @@ public class JdkRtBridge {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("[NETWORK] [TCP] [before connect] {}:{}", address, port);
 
-        if (!PermissionContext.currentContext().hasPermission(StandardPermissions.NETWORK)) {
-            throw new ConnectException(StringFormatable.format(
-                    "Can't connect {}:{} because current context don't have network permission",
-                    MiscKit.ipv6format(address), port
-            ));
-        }
+        ControlServices.NETWORK_CONTROL.onTcpConnect(address, port);
     }
 
     public static void net$beforeTcpBind(
@@ -313,36 +316,20 @@ public class JdkRtBridge {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("[NETWORK] [TCP] [before bind   ] {}:{}", address, port);
 
-        if (!PermissionContext.currentContext().hasPermission(StandardPermissions.NETWORK)) {
-            throw new BindException(StringFormatable.format(
-                    "Can't bind {}:{} because current context don't have network permission",
-                    MiscKit.ipv6format(address), port
-            ));
-        }
+        ControlServices.NETWORK_CONTROL.onTcpBind(address, port);
     }
 
     public static void net$udpBind(SocketAddress local) throws IOException {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("[NETWORK] [UDP] [bind   ] {}", local);
 
-        if (!PermissionContext.currentContext().hasPermission(StandardPermissions.NETWORK)) {
-            throw new BindException(StringFormatable.format(
-                    "Can't bind {} because current context don't have network permission",
-                    local == null ? "0.0.0.0:0" : local
-            ));
-        }
+        ControlServices.NETWORK_CONTROL.onUdpBind(local);
     }
 
     public static void net$udpConnect(InetSocketAddress address) throws IOException {
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("[NETWORK] [UDP] [connect] {}", address);
 
-
-        if (!PermissionContext.currentContext().hasPermission(StandardPermissions.NETWORK)) {
-            throw new ConnectException(StringFormatable.format(
-                    "Can't connect {} because current context don't have network permission",
-                    address
-            ));
-        }
+        ControlServices.NETWORK_CONTROL.onUdpConnect(address);
     }
 }

@@ -12,7 +12,12 @@ public abstract class ImplBridge {
     public abstract PermissionContext currentPermissionContext();
 
     public abstract void permit(Object obj, Permission perm);
+
     public abstract void revoke(Object obj, Permission perm);
 
     public abstract PermissionContext myPermissions();
+
+    public abstract void regCtrService(Class<?> klass, Object instance);
+
+    public abstract Object getService(Class<?> klass);
 }

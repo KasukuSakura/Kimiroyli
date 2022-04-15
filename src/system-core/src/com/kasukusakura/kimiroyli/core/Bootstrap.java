@@ -3,6 +3,7 @@ package com.kasukusakura.kimiroyli.core;
 import com.kasukusakura.kimiroyli.api.internal.Threads;
 import com.kasukusakura.kimiroyli.api.log.LogAdapter;
 import com.kasukusakura.kimiroyli.api.perm.StandardPermissions;
+import com.kasukusakura.kimiroyli.core.control.CSBuiltIn;
 import com.kasukusakura.kimiroyli.core.log.DefLogAdapter;
 import com.kasukusakura.kimiroyli.core.perm.PermCtxImpl;
 import com.kasukusakura.kimiroyli.core.perm.PermManager;
@@ -50,6 +51,7 @@ public class Bootstrap {
 
         Unsafe.getUnsafe();
         LogAdapter.setAdapter(new DefLogAdapter());
+        CSBuiltIn.init();
 
         // Step. 1. Cleanup premain functions
         {
@@ -59,6 +61,7 @@ public class Bootstrap {
                 }
             };
             var trans = new ClassFileTransformer() {
+                @SuppressWarnings("RedundantThrows")
                 @Override
                 public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
                     if (classBeingRedefined == null) return null;
@@ -232,6 +235,7 @@ public class Bootstrap {
             volatile RunAnyLambda<ClassNode> modifier;
             volatile boolean computeMax = false;
 
+            @SuppressWarnings("RedundantThrows")
             @Override
             public byte[] transform(
                     ClassLoader loader,
