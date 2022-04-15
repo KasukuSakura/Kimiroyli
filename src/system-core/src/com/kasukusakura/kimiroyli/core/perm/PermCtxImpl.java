@@ -93,7 +93,7 @@ public class PermCtxImpl extends PermissionContext {
     @Override
     public <T> T runWith(Collection<Permission> perms, PrivilegedAction<T> action) {
         if (perms == null) return action.run();
-        if (permissions.contains(StandardPermissions.ROOT)) {
+        if (hasPermission(StandardPermissions.PERMISSION_MANAGER)) {
             var nw = (ArrayList<Permission>) permissions.clone();
             nw.addAll(perms);
 
@@ -137,7 +137,7 @@ public class PermCtxImpl extends PermissionContext {
 
     @Override
     public <T> T runAs(Collection<Permission> permissions, PrivilegedAction<T> action) {
-        if (permissions.contains(StandardPermissions.ROOT)) {
+        if (hasPermission(StandardPermissions.PERMISSION_MANAGER)) {
             var old = CTX.get();
             try {
                 CTX.set(new PermCtxImpl(new ArrayList<>(permissions)));
