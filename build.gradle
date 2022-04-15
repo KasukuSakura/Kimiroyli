@@ -42,6 +42,7 @@ subprojects {
             'org.jetbrains:annotations'            : '23.0.0',
             'org.ow2.asm'                          : '9.2',
             'io.github.karlatemp:unsafe-accessor'  : '1.6.2',
+            'org.junit.jupiter'                    : '5.8.2',
     ]
     allprojects {
         afterEvaluate {

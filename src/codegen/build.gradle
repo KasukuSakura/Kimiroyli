@@ -1,0 +1,17 @@
+dependencies {
+    api 'org.junit.jupiter:junit-jupiter-api'
+    api 'org.ow2.asm:asm'
+    api 'org.ow2.asm:asm-tree'
+    api 'org.ow2.asm:asm-commons'
+    api 'org.ow2.asm:asm-util'
+    api 'org.ow2.asm:asm-analysis'
+}
+
+tasks.register('doCodegen', JavaExec.class) { exec ->
+    exec.classpath = project.sourceSets.main.runtimeClasspath
+    exec.jvmArgs('-Dline.separator=\n')
+    exec.main 'com.kasukusakura.kimiroyli.cg.Codegen'
+    exec.workingDir = rootProject.projectDir
+    exec.environment('TST_CP', project.sourceSets.main.output.classesDirs.singleFile.absolutePath)
+    exec.environment('PROJ_VER', String.valueOf(project.version))
+}
